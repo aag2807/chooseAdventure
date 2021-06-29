@@ -43,28 +43,27 @@ var defaultHandlerTemplate = `
 </html>
 `
 
-func NewHandler(s Story, t *template.Template) Handler {
-	if t == nil {
-		t = tpl
+type HandlerOption func(h *Handler)
+
+func WithTemplate(t *template.Template) HandlerOption {
+	return func(h *Handler) {
+		h.t = t
 	}
-	return Handler{s, t}
 }
 
-type Handler struct {
-	s Story
-	t *template.Template
+func NewHandler(s Story, opts ...HandlerOption) Handler {
+	h := Handler{s, tpl, defaultPathFn}
+	for _, opt := range opts {
+		opt(&h)
+	}
+	return h
 }
 
 func (h Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	path := strings.TrimSpace(req.URL.Path)
+	path := h.pathFn(req)
 
-	if path == "" || path == "/" {
-		path = "/intro"
-	}
-
-	path = path[1:]
 	if chapter, ok := h.s[path]; ok {
-		err := tpl.Execute(res, chapter)
+		err := h.t.Execute(res, chapter)
 		if err != nil {
 			log.Println(err)
 			http.Error(res, "something went wrong...", http.StatusInternalServerError)
@@ -74,8 +73,6 @@ func (h Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	http.Error(res, "Chapter not found.", http.StatusNotFound)
 }
 
-type Story map[string]Chapter
-
 func JsonStory(r io.Reader) (Story, error) {
 	d := json.NewDecoder(r)
 	var story Story
@@ -83,6 +80,14 @@ func JsonStory(r io.Reader) (Story, error) {
 		return nil, err
 	}
 	return story, nil
+}
+
+func defaultPathFn(req *http.Request) string {
+	path := strings.TrimSpace(req.URL.Path)
+	if path == "" || path == "/" {
+		path = "/intro"
+	}
+	return path[1:]
 }
 
 type Chapter struct {
@@ -95,3 +100,11 @@ type Option struct {
 	Text    string `json:"text"`
 	Chapter string `json:"arc"`
 }
+
+type Handler struct {
+	s      Story
+	t      *template.Template
+	pathFn func(req *http.Request) string
+}
+
+type Story map[string]Chapter
