@@ -43,12 +43,16 @@ var defaultHandlerTemplate = `
 </html>
 `
 
-func NewHandler(s Story) Handler {
-	return Handler{s}
+func NewHandler(s Story, t *template.Template) Handler {
+	if t == nil {
+		t = tpl
+	}
+	return Handler{s, t}
 }
 
 type Handler struct {
 	s Story
+	t *template.Template
 }
 
 func (h Handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
